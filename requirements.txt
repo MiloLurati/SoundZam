@@ -1,0 +1,7 @@
+Flask
+pydub
+shazamio
+soundcloud-lib
+tqdm
+yt-dlp
+gunicorn

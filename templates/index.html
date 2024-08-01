@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SoundZam</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+        form { margin-bottom: 20px; }
+        input[type="text"] { width: 70%; padding: 10px; }
+        input[type="submit"] { padding: 10px 20px; }
+        ul { list-style-type: none; padding: 0; }
+        li { margin-bottom: 10px; }
+        #progress-container { display: none; margin-top: 20px; }
+        #progress-bar { width: 100%; background-color: #f0f0f0; }
+        #progress { width: 0%; height: 30px; background-color: #4CAF50; text-align: center; line-height: 30px; color: white; }
+    </style>
+</head>
+<body>
+    <h1>SoundZam</h1>
+    <form id="url-form" method="post">
+        <input type="text" name="url" placeholder="Enter SoundCloud or YouTube URL" required>
+        <input type="submit" value="Identify Tracks">
+    </form>
+    <div id="progress-container">
+        <h3 id="status-message">Downloading track...</h3>
+        <div id="progress-bar">
+            <div id="progress"></div>
+        </div>
+    </div>
+    <div id="error-message" style="color: red;"></div>
+    <div id="result-container"></div>
+
+    <script>
+        document.getElementById('url-form').onsubmit = function(e) {
+            e.preventDefault();
+            var form = this;
+            var url = form.elements.url.value;
+            document.getElementById('progress-container').style.display = 'block';
+            document.getElementById('result-container').innerHTML = '';
+            document.getElementById('error-message').innerHTML = '';
+
+            var xhr = new XMLHttpRequest();
+            xhr.open('POST', '/', true);
+            xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+            xhr.onload = function() {
+                if (xhr.status === 200) {
+                    var response = JSON.parse(xhr.responseText);
+                    if (response.error) {
+                        document.getElementById('error-message').innerHTML = 'Error: ' + response.error;
+                    } else if (response.result) {
+                        var resultHtml = '<h2>Identified Tracks:</h2><ul>';
+                        response.result.forEach(function(track) {
+                            resultHtml += '<li>' + track.artist + ' - ' + track.title + '</li>';
+                        });
+                        resultHtml += '</ul>';
+                        document.getElementById('result-container').innerHTML = resultHtml;
+                    }
+                } else {
+                    document.getElementById('error-message').innerHTML = 'Error: ' + xhr.statusText;
+                }
+                document.getElementById('progress-container').style.display = 'none';
+                clearInterval(progressInterval);  // Stop checking progress
+            };
+            xhr.send('url=' + encodeURIComponent(url));
+
+            var progressBar = document.getElementById('progress');
+            var statusMessage = document.getElementById('status-message');
+            var progressInterval = setInterval(function() {
+                var progressXhr = new XMLHttpRequest();
+                progressXhr.open('GET', '/progress', true);
+                progressXhr.onload = function() {
+                    if (progressXhr.status === 200) {
+                        var progressData = JSON.parse(progressXhr.responseText);
+                        if (progressData.progress === 0) {
+                            statusMessage.innerHTML = 'Downloading track...';
+                        } else {
+                            statusMessage.innerHTML = 'Analyzing track...';
+                            progressBar.style.width = progressData.progress + '%';
+                            progressBar.innerHTML = progressData.progress + '%';
+                        }
+                        if (progressData.progress === 100) {
+                            statusMessage.innerHTML = 'Analysis complete!';
+                            clearInterval(progressInterval);  // Stop checking progress
+                        }
+                    }
+                };
+                progressXhr.send();
+            }, 500);
+        };
+    </script>
+</body>
+</html>
