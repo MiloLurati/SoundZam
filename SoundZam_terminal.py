@@ -6,6 +6,7 @@ from shazamio import Shazam
 from sclib import SoundcloudAPI, Track
 from tqdm.asyncio import tqdm as tqdm_asyncio
 import asyncio
+from youtubesearchpython import VideosSearch
 
 async def identify_tracks(audio_path):
     print("Identifying tracks...")
@@ -59,6 +60,15 @@ def download_soundcloud_audio(url):
 
     return audio_path
 
+def get_youtube_link(artist, title):
+    search_query = f"{artist} - {title}"
+    videos_search = VideosSearch(search_query, limit=1)
+    results = videos_search.result()
+    
+    if results['result']:
+        return results['result'][0]['link']
+    return None
+
 def main():
     if len(sys.argv) != 2:
         print("Usage: python SoundZam.py <soundcloud_url>")
@@ -69,8 +79,18 @@ def main():
 
     tracks = asyncio.run(identify_tracks(audio_path))
 
+    print("\nIdentified tracks:")
     for track in tracks:
-        print(f"{track['subtitle']} - {track['title']}")
+        artist = track['subtitle']
+        title = track['title']
+        youtube_link = get_youtube_link(artist, title)
+        
+        if youtube_link:
+            print(f"{artist} - {title}")
+            print(f"YouTube link: {youtube_link}\n")
+        else:
+            print(f"{artist} - {title}")
+            print("YouTube link not found.\n")
 
     os.remove(audio_path)
     if os.path.exists("temp_segment.mp3"):

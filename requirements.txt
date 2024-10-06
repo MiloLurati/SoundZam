@@ -5,3 +5,4 @@ soundcloud-lib
 tqdm
 yt-dlp
 gunicorn
+youtube-search-python
