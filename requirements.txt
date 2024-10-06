@@ -6,3 +6,5 @@ tqdm
 yt-dlp
 gunicorn
 youtube-search-python
+asyncio
+aiohttp

@@ -5,88 +5,146 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SoundZam</title>
     <style>
-        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
-        form { margin-bottom: 20px; }
-        input[type="text"] { width: 70%; padding: 10px; }
-        input[type="submit"] { padding: 10px 20px; }
-        ul { list-style-type: none; padding: 0; }
-        li { margin-bottom: 10px; }
-        #progress-container { display: none; margin-top: 20px; }
-        #progress-bar { width: 100%; background-color: #f0f0f0; }
-        #progress { width: 0%; height: 30px; background-color: #4CAF50; text-align: center; line-height: 30px; color: white; }
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        form {
+            margin-bottom: 20px;
+        }
+        input[type="text"] {
+            width: 70%;
+            padding: 10px;
+        }
+        input[type="submit"] {
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+        .result {
+            margin-bottom: 20px;
+            padding: 10px;
+            background-color: #f0f0f0;
+        }
+        .video-container {
+            position: relative;
+            padding-bottom: 56.25%; /* 16:9 aspect ratio */
+            height: 0;
+            overflow: hidden;
+            margin-top: 10px;
+        }
+        .video-container iframe {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+        #progress-container {
+            display: none;
+            margin-top: 20px;
+        }
+        #progress-bar {
+            width: 100%;
+            height: 30px;
+        }
+        #loading-message {
+            display: none;
+            color: #4CAF50;
+            font-weight: bold;
+        }
     </style>
 </head>
 <body>
     <h1>SoundZam</h1>
-    <form id="url-form" method="post">
-        <input type="text" name="url" placeholder="Enter SoundCloud or YouTube URL" required>
+    <form id="soundzam-form" method="POST">
+        <input type="text" name="soundcloud_url" placeholder="Enter SoundCloud URL" required>
         <input type="submit" value="Identify Tracks">
     </form>
-    <div id="progress-container">
-        <h3 id="status-message">Downloading track...</h3>
-        <div id="progress-bar">
-            <div id="progress"></div>
-        </div>
+    
+    <div id="progress-container" style="display: none;">
+        <progress id="progress-bar" value="0" max="100"></progress>
+        <p id="progress-status"></p>
     </div>
-    <div id="error-message" style="color: red;"></div>
-    <div id="result-container"></div>
+
+    <p id="loading-message">Processing... Please wait.</p>
+
+    <div id="error-container"></div>
+    
+    <div id="results-container"></div>
 
     <script>
-        document.getElementById('url-form').onsubmit = function(e) {
-            e.preventDefault();
-            var form = this;
-            var url = form.elements.url.value;
-            document.getElementById('progress-container').style.display = 'block';
-            document.getElementById('result-container').innerHTML = '';
-            document.getElementById('error-message').innerHTML = '';
+        let eventSource;
 
-            var xhr = new XMLHttpRequest();
-            xhr.open('POST', '/', true);
-            xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
-            xhr.onload = function() {
-                if (xhr.status === 200) {
-                    var response = JSON.parse(xhr.responseText);
-                    if (response.error) {
-                        document.getElementById('error-message').innerHTML = 'Error: ' + response.error;
-                    } else if (response.result) {
-                        var resultHtml = '<h2>Identified Tracks:</h2><ul>';
-                        response.result.forEach(function(track) {
-                            resultHtml += '<li>' + track.artist + ' - ' + track.title + '</li>';
-                        });
-                        resultHtml += '</ul>';
-                        document.getElementById('result-container').innerHTML = resultHtml;
-                    }
-                } else {
-                    document.getElementById('error-message').innerHTML = 'Error: ' + xhr.statusText;
+        function startProgressStream() {
+            if (eventSource) {
+                eventSource.close();
+            }
+            eventSource = new EventSource('/progress');
+            eventSource.onmessage = function(e) {
+                var progress = JSON.parse(e.data);
+                document.getElementById('progress-bar').value = progress.value;
+                document.getElementById('progress-status').textContent = progress.status;
+                
+                if (progress.value === 100) {
+                    eventSource.close();
+                    document.getElementById('loading-message').style.display = 'none';
                 }
-                document.getElementById('progress-container').style.display = 'none';
-                clearInterval(progressInterval);  // Stop checking progress
             };
-            xhr.send('url=' + encodeURIComponent(url));
+        }
 
-            var progressBar = document.getElementById('progress');
-            var statusMessage = document.getElementById('status-message');
-            var progressInterval = setInterval(function() {
-                var progressXhr = new XMLHttpRequest();
-                progressXhr.open('GET', '/progress', true);
-                progressXhr.onload = function() {
-                    if (progressXhr.status === 200) {
-                        var progressData = JSON.parse(progressXhr.responseText);
-                        if (progressData.progress === 0) {
-                            statusMessage.innerHTML = 'Downloading track...';
-                        } else {
-                            statusMessage.innerHTML = 'Analyzing track...';
-                            progressBar.style.width = progressData.progress + '%';
-                            progressBar.innerHTML = progressData.progress + '%';
-                        }
-                        if (progressData.progress === 100) {
-                            statusMessage.innerHTML = 'Analysis complete!';
-                            clearInterval(progressInterval);  // Stop checking progress
-                        }
-                    }
-                };
-                progressXhr.send();
-            }, 500);
+        function renderResults(results) {
+            const container = document.getElementById('results-container');
+            container.innerHTML = '<h2>Identified Tracks:</h2>';
+            results.forEach(result => {
+                const resultDiv = document.createElement('div');
+                resultDiv.className = 'result';
+                resultDiv.innerHTML = `
+                    <p><strong>${result.artist} - ${result.title}</strong></p>
+                    ${result.youtube_id ? `
+                        <div class="video-container">
+                            <iframe src="https://www.youtube.com/embed/${result.youtube_id}" frameborder="0" allow="autoplay; encrypted-media" allowfullscreen></iframe>
+                        </div>
+                    ` : '<p>YouTube video not found.</p>'}
+                `;
+                container.appendChild(resultDiv);
+            });
+        }
+
+        document.getElementById('soundzam-form').onsubmit = function(e) {
+            e.preventDefault();
+            
+            document.getElementById('progress-container').style.display = 'block';
+            document.getElementById('progress-bar').value = 0;
+            document.getElementById('progress-status').textContent = 'Starting...';
+            document.getElementById('loading-message').style.display = 'block';
+            document.getElementById('results-container').innerHTML = '';
+            document.getElementById('error-container').innerHTML = '';
+            
+            startProgressStream();
+            
+            fetch('/', {
+                method: 'POST',
+                body: new FormData(this)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    document.getElementById('error-container').innerHTML = `<p style="color: red;">${data.error}</p>`;
+                } else if (data.results) {
+                    renderResults(data.results);
+                }
+                document.getElementById('loading-message').style.display = 'none';
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                document.getElementById('error-container').innerHTML = '<p style="color: red;">An error occurred. Please try again.</p>';
+                document.getElementById('loading-message').style.display = 'none';
+            });
         };
     </script>
 </body>
